@@ -145,6 +145,12 @@ def main() -> int:
         total = 0
         for src in files:
             rel = os.path.relpath(src, root)
+            # arXiv resolves \usepackage/\documentclass/\bibliographystyle through
+            # TEXINPUTS, which covers only the top level -- a local vendor/ directory
+            # that works here would break there. Figures and \input'd body files are
+            # referenced by explicit path, so those keep their layout.
+            if rel.endswith((".sty", ".cls", ".bst")):
+                rel = os.path.basename(rel)
             dst = os.path.join(staging, rel)
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             if src.endswith((".tex", ".sty", ".cls")) and not args.keep_comments:
