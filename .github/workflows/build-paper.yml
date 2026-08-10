@@ -37,6 +37,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Needed by the release step. Default token permissions are read-only, which fails
+    # only on tag pushes -- so a branch build passing does not prove releases work.
+    permissions:
+      contents: write
     container:
       image: ${{ inputs.texlive-image }}
     steps:
