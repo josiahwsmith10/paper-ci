@@ -37,10 +37,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Needed by the release step. Default token permissions are read-only, which fails
-    # only on tag pushes -- so a branch build passing does not prove releases work.
-    permissions:
-      contents: write
+    # NOTE: `permissions` is deliberately NOT set here. A called workflow may only
+    # narrow the caller's permissions, never widen them, so requesting contents:write
+    # in this file makes every caller with default (read-only) permissions fail to
+    # start. The caller grants contents:write on its own job -- see README.
     container:
       image: ${{ inputs.texlive-image }}
     steps:
