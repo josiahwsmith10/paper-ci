@@ -1,0 +1,102 @@
+name: Build paper
+
+# Reusable workflow. Each paper repo calls this instead of copying build logic.
+# Fix a bug here, bump the tag, and every paper picks it up.
+
+on:
+  workflow_call:
+    inputs:
+      main:
+        description: Main .tex for the journal/conference build
+        type: string
+        default: main.tex
+      arxiv-main:
+        description: Main .tex for the arXiv build. Empty to skip the arXiv bundle.
+        type: string
+        default: main_arxiv.tex
+      bib:
+        description: Shared .bib consumed by the paper (used for the cited-only prune)
+        type: string
+        default: bib/refs.bib
+      name:
+        description: Base name for released assets, e.g. "spectral-sr-swin"
+        type: string
+        required: true
+      texlive-image:
+        description: Container image providing TeX Live
+        type: string
+        default: texlive/texlive:latest
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ inputs.texlive-image }}
+    steps:
+      - name: Check out paper
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Check out build scripts
+        uses: actions/checkout@v4
+        with:
+          repository: josiahwsmith10/paper-ci
+          ref: v1
+          path: .paper-ci
+
+      # The container runs as a different user than the checkout, so git refuses to
+      # operate on the tree without this.
+      - name: Trust workspace
+        run: git config --global --add safe.directory '*'
+
+      - name: Build ${{ inputs.main }}
+        run: |
+          latexmk -pdf -recorder -interaction=nonstopmode -halt-on-error \
+                  -file-line-error "${{ inputs.main }}"
+
+      - name: Build ${{ inputs.arxiv-main }}
+        if: inputs.arxiv-main != ''
+        run: |
+          latexmk -pdf -recorder -interaction=nonstopmode -halt-on-error \
+                  -file-line-error "${{ inputs.arxiv-main }}"
+
+      - name: Collect outputs
+        run: |
+          mkdir -p dist
+          cp "$(basename '${{ inputs.main }}' .tex).pdf" "dist/${{ inputs.name }}.pdf"
+          if [ -n "${{ inputs.arxiv-main }}" ]; then
+            cp "$(basename '${{ inputs.arxiv-main }}' .tex).pdf" \
+               "dist/${{ inputs.name }}-arxiv.pdf"
+          fi
+
+      # Not needed for arXiv (the .bbl covers it), but IEEE and most publishers ask for
+      # a .bib with the manuscript, and shipping the 432-entry shared file is rude.
+      - name: Prune bibliography to cited entries
+        if: hashFiles(inputs.bib) != ''
+        run: |
+          python3 .paper-ci/scripts/prune_bib.py \
+            --aux "$(basename '${{ inputs.main }}' .tex).aux" \
+            --bib "${{ inputs.bib }}" \
+            --out "dist/${{ inputs.name }}-refs.bib" || true
+
+      - name: Bundle arXiv submission
+        if: inputs.arxiv-main != ''
+        run: |
+          python3 .paper-ci/scripts/make_arxiv.py \
+            --main "${{ inputs.arxiv-main }}" \
+            --out "dist/${{ inputs.name }}-arxiv.tar.gz"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.name }}-build
+          path: dist/
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          fail_on_unmatched_files: true
