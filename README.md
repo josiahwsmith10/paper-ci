@@ -13,12 +13,20 @@ on: [push, pull_request]
 
 jobs:
   paper:
+    permissions:
+      contents: write   # required: lets tag builds create the Release
     uses: josiahwsmith10/paper-ci/.github/workflows/build-paper.yml@v1
     with:
       name: spectral-sr-swin
       main: main.tex
       arxiv-main: main_arxiv.tex
 ```
+
+**`permissions: contents: write` must be on the caller.** A called workflow can only
+narrow the caller's permissions, never widen them, so this cannot be set here on your
+behalf — declaring it in `build-paper.yml` makes every caller with default (read-only)
+token permissions fail to start. Omitting it is easy to miss, because branch builds pass
+either way; only the tag build fails, at the very last step, after a full LaTeX run.
 
 Every push produces a `*-build` artifact containing:
 
