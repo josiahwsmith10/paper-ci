@@ -7,9 +7,14 @@ on:
   workflow_call:
     inputs:
       main:
-        description: Main .tex for the journal/conference build
+        description: Main .tex for the published journal/conference build
         type: string
         default: main.tex
+      onecolumn-main:
+        description: >
+          Main .tex for the one-column review-submission build. Empty to skip.
+        type: string
+        default: ''
       arxiv-main:
         description: Main .tex for the arXiv build. Empty to skip the arXiv bundle.
         type: string
@@ -68,6 +73,12 @@ jobs:
           latexmk -pdf -recorder -interaction=nonstopmode -halt-on-error \
                   -file-line-error "${{ inputs.main }}"
 
+      - name: Build ${{ inputs.onecolumn-main }}
+        if: inputs.onecolumn-main != ''
+        run: |
+          latexmk -pdf -recorder -interaction=nonstopmode -halt-on-error \
+                  -file-line-error "${{ inputs.onecolumn-main }}"
+
       - name: Build ${{ inputs.arxiv-main }}
         if: inputs.arxiv-main != ''
         run: |
@@ -78,6 +89,10 @@ jobs:
         run: |
           mkdir -p dist
           cp "$(basename '${{ inputs.main }}' .tex).pdf" "dist/${{ inputs.name }}.pdf"
+          if [ -n "${{ inputs.onecolumn-main }}" ]; then
+            cp "$(basename '${{ inputs.onecolumn-main }}' .tex).pdf" \
+               "dist/${{ inputs.name }}-onecolumn.pdf"
+          fi
           if [ -n "${{ inputs.arxiv-main }}" ]; then
             cp "$(basename '${{ inputs.arxiv-main }}' .tex).pdf" \
                "dist/${{ inputs.name }}-arxiv.pdf"
